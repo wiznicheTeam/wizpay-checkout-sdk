@@ -117,6 +117,10 @@ Configured per store under **Developers → Checkout**, not in code:
   both, with an optional cap). Debit and prepaid cards are exempt by default,
   because US card network rules prohibit surcharging them.
 - **Tips** — presets, custom amounts, optional preselection.
+- **Card verification (3D Secure)** — automatic (recommended), always, or never.
+  Verification shifts fraud-chargeback liability to the customer's bank, so
+  turning it off means you carry that liability. It also does not apply outside
+  the US: banks in the UK and Europe are required to verify regardless.
 - **Appearance** — theme and language. Your logo and brand colour come from
   **Settings → Branding**, so checkout always matches the rest of your account.
 

@@ -203,6 +203,9 @@ export class CheckoutWidget {
         ...(this.savedMethodId
           ? { savedMethodId: this.savedMethodId }
           : { tokenIntentId: await this.tokenize() }),
+        ...(this.method === 'ach'
+          ? { accountHolderName: this.q<HTMLInputElement>('holder')?.value.trim() }
+          : {}),
         saveCard: this.q<HTMLInputElement>('save-card')?.checked ?? false,
         holderName: this.q<HTMLInputElement>('holder')?.value.trim(),
         email: this.q<HTMLInputElement>('email')?.value.trim(),
@@ -213,6 +216,11 @@ export class CheckoutWidget {
       if (result.status === 'requires_action') {
         await this.handleAction(result);
         return;
+      }
+      if (result.status === 'succeeded' && this.method === 'ach') {
+        // An ACH debit is not instant. Telling the shopper it is "paid" invites
+        // a support ticket when it settles days later.
+        this.showNotice('Your bank transfer has started. It usually clears in a few business days.');
       }
       if (result.status === 'failed') {
         // A decline is recoverable: keep the form, show why, let them retry.
@@ -238,6 +246,12 @@ export class CheckoutWidget {
    */
   private async tokenize(): Promise<string> {
     if (!this.bt) throw new Error('WIZPay: secure card fields are not ready yet.');
+
+    // ACH vaults the bank account the same way a card is vaulted: account and
+    // routing numbers are as sensitive as a PAN, so they go straight to the
+    // vault and this page only ever holds the resulting id.
+    if (this.method === 'ach') return this.tokenizeBank();
+
     const intent = await this.bt.tokenIntents.create({
       type: 'card',
       card: {
@@ -248,6 +262,32 @@ export class CheckoutWidget {
       },
     });
     return intent.id;
+  }
+
+  /**
+   * Vault the bank account for an ACH debit.
+   *
+   * These are plain inputs rather than vault-hosted iframes, because a routing
+   * and account number are not under the card schemes' iframe requirement. They
+   * still never reach the merchant's server or ours: the values go straight to
+   * the vault and only the id comes back.
+   */
+  private async tokenizeBank(): Promise<string> {
+    const routing = this.q<HTMLInputElement>('routing')?.value.trim() ?? '';
+    const account = this.q<HTMLInputElement>('account')?.value.trim() ?? '';
+    // Check locally first: a malformed number is a certain decline days later,
+    // and ACH gives no immediate feedback to correct it.
+    if (!/^\d{9}$/.test(routing)) throw new Error('WIZPay: a US routing number is 9 digits.');
+    if (!/^\d{4,17}$/.test(account)) throw new Error('WIZPay: check the account number.');
+
+    const res = await fetch('https://api.basistheory.com/token-intents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'BT-API-KEY': this.config.basisTheoryPublicKey as string },
+      body: JSON.stringify({ type: 'bank', data: { routing_number: routing, account_number: account } }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { id?: string };
+    if (!res.ok || !body.id) throw new Error('WIZPay: could not securely store those bank details.');
+    return body.id;
   }
 
   /**
@@ -437,6 +477,16 @@ export class CheckoutWidget {
     this.toggle(name, true);
   }
 
+  /** A non-error message, styled apart from a failure. */
+  private showNotice(message: string): void {
+    const el = this.q('error');
+    if (el) {
+      el.textContent = message;
+      el.classList.add('wzp__error--notice');
+      el.hidden = false;
+    }
+  }
+
   private showError(message: string): void {
     const el = this.q('error');
     if (el) {
@@ -447,7 +497,10 @@ export class CheckoutWidget {
 
   private clearError(): void {
     const el = this.q('error');
-    if (el) el.hidden = true;
+    if (el) {
+      el.hidden = true;
+      el.classList.remove('wzp__error--notice');
+    }
   }
 
   private fail(error: Error): void {

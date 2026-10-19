@@ -1,0 +1,55 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Verifying your payment</title>
+<!--
+  3D Secure return page.
+
+  The card issuer POSTs its authentication result here, inside the iframe the
+  checkout created. This page's only job is to hand that result back to the
+  checkout page and get out of the way.
+
+  It is served from the SDK's own CDN origin ON PURPOSE: the checkout verifies
+  every incoming message against this exact origin. Without that check any page
+  could post a "verified" result into the checkout and skip authentication
+  altogether, so this file must never move to a shared or user-content origin.
+
+  Deliberately tiny and dependency-free — it runs inside a bank's iframe, where
+  anything that fails to load strands the shopper mid-payment.
+-->
+<body style="margin:0;background:transparent">
+<script>
+(function () {
+  // The issuer posts form fields; read whichever it sent.
+  function field(name) {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get(name)) return params.get(name);
+    } catch (e) {}
+    var el = document.querySelector('input[name="' + name + '"]');
+    return el ? el.value : null;
+  }
+
+  function decode(value) {
+    try { return JSON.parse(atob(value)); } catch (e) { return null; }
+  }
+
+  var cres = field('cres');
+  var methodData = field('threeDSMethodData');
+
+  var message;
+  if (cres) {
+    // Challenge finished. transStatus Y = authenticated, N = not.
+    var parsed = decode(cres) || {};
+    message = { source: 'wizpay-3ds', kind: 'challenge', payload: { transStatus: parsed.transStatus || 'N' } };
+  } else {
+    // Fingerprint finished. Its presence is the signal; there is no status.
+    message = { source: 'wizpay-3ds', kind: 'fingerprint', payload: { completed: true, data: methodData || null } };
+  }
+
+  // Post to the opener/parent. '*' is correct here and not a weakness: this page
+  // sends nothing secret, and the RECEIVER pins our origin. Pinning the parent
+  // from inside a bank's iframe is not reliably possible.
+  try { (window.parent || window.top).postMessage(message, '*'); } catch (e) {}
+})();
+</script>
+</body>

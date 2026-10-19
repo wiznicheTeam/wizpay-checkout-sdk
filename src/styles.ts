@@ -41,6 +41,7 @@ export function widgetStyles(): string {
 .wzp__pay{width:100%;min-height:48px;border:0;border-radius:var(--wzp-radius);background:var(--wzp-brand);color:#fff;font:inherit;font-size:16px;font-weight:700;cursor:pointer}
 .wzp__pay:disabled{opacity:.55;cursor:not-allowed}
 .wzp__error{margin-bottom:var(--wzp-gap);padding:10px 12px;border-radius:var(--wzp-radius);background:rgba(180,35,24,.1);color:var(--wzp-danger);font-size:14px}
+.wzp__error--notice{background:rgba(0,90,160,.1);color:var(--wzp-brand)}
 .wzp__saved{display:flex;flex-direction:column;gap:8px;margin-bottom:var(--wzp-gap)}
 .wzp__card{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--wzp-line);border-radius:var(--wzp-radius);background:var(--wzp-surface);cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
 .wzp__card[aria-pressed="true"]{border-color:var(--wzp-brand);box-shadow:inset 0 0 0 1px var(--wzp-brand)}

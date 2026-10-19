@@ -54,7 +54,7 @@ const session = await wizpay.sessions.create({
   currency: 'USD',
   merchantReference: order.id,
   customerRef: customer.id,     // enables saved cards for this customer
-  returnUrl: 'https://example.com/thank-you',
+  returnUrl: 'https://example.com/thank-you',   // optional — see below
 });
 
 // Pass these to your page. Never the secret key.
@@ -64,6 +64,10 @@ res.render('checkout', { sessionId: session.id, clientSecret: session.clientSecr
 `amountMinor` is **always** an integer in the currency's minor units. `$125.00`
 is `12500`. Passing `125.00` would charge $1.25, so the SDK rejects a decimal
 rather than letting it through.
+
+`returnUrl` is **optional**. It is where 3D Secure sends the shopper back after
+their bank verifies the payment; if you omit it, we return them to the page the
+checkout is running on. Set it when you want them to land somewhere specific.
 
 `clientSecret` is returned **once** — it is stored only as a hash and cannot be
 fetched later. Treat it like a password: it authorises payment of that session.

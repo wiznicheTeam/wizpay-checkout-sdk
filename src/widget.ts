@@ -1,0 +1,423 @@
+import { AddressInput } from './address';
+import { loadBasisTheory, type BTChangeEvent, type BTElement, type BasisTheory } from './elements';
+import { formatMoney } from './format';
+import { resolveMode } from './environment';
+import { injectStyles, resolveTheme } from './styles';
+import { summaryHtml, widgetHtml } from './template';
+import {
+  CheckoutSessionClient,
+  collectBrowserInfo,
+  type ConfirmResult,
+  type Pricing,
+  type PublicCheckoutConfig,
+  type SavedMethod,
+  type SessionView,
+  type TipChoice,
+} from './session';
+
+export interface MountOptions {
+  publishableKey: string;
+  sessionId: string;
+  clientSecret: string;
+  /** CSS selector or element to render into. */
+  selector: string | HTMLElement;
+  /** Point at another WIZPay deployment. Most integrations never set this. */
+  apiBase?: string;
+  onSuccess?: (result: ConfirmResult) => void;
+  onError?: (error: Error) => void;
+  /** Fires whenever the total changes (method, tip, or card type). */
+  onPricingChange?: (pricing: Pricing) => void;
+}
+
+/**
+ * The mounted checkout.
+ *
+ * Holds no card data at any point: the number, expiry and CVC live in Basis
+ * Theory's iframes, and this code only ever sees a token-intent id. It also
+ * holds no prices of its own — every total displayed comes from a server quote,
+ * so what the shopper sees and what is charged are the same computation.
+ */
+export class CheckoutWidget {
+  private readonly client: CheckoutSessionClient;
+  private readonly isTest: boolean;
+  private root!: HTMLElement;
+  private bt?: BasisTheory;
+  private elements: Record<string, BTElement> = {};
+  private address?: AddressInput;
+
+  private session!: SessionView;
+  private config!: PublicCheckoutConfig;
+  private pricing!: Pricing;
+
+  private method = 'card';
+  private tip: TipChoice | undefined;
+  private funding = 'unknown';
+  private cardComplete = false;
+  private savedMethodId: string | undefined;
+  private busy = false;
+  private destroyed = false;
+
+  constructor(private readonly options: MountOptions) {
+    // Throws on a secret key, with the consequence spelled out.
+    this.isTest = resolveMode(options.publishableKey) === 'test';
+    this.client = new CheckoutSessionClient(
+      options.publishableKey,
+      options.sessionId,
+      options.clientSecret,
+      { apiBase: options.apiBase },
+    );
+  }
+
+  async mount(): Promise<void> {
+    this.root = resolveElement(this.options.selector);
+    injectStyles();
+
+    this.session = await this.client.load();
+    this.config = await this.client.config(sessionStoreId(this.session));
+    this.pricing = this.session.pricing;
+    this.method = this.session.methods[0] ?? 'card';
+
+    this.root.innerHTML = widgetHtml({
+      session: this.session,
+      config: this.config,
+      theme: resolveTheme(this.config.theme),
+      isTest: this.isTest,
+    });
+
+    this.bindUi();
+    this.renderSummary();
+    await this.mountCardFields();
+    await this.loadSavedCards();
+    this.updatePayButton();
+  }
+
+  /** Tear down the iframes and markup. Safe to call more than once. */
+  destroy(): void {
+    this.destroyed = true;
+    for (const el of Object.values(this.elements)) el.unmount?.();
+    this.elements = {};
+    if (this.root) this.root.innerHTML = '';
+  }
+
+  // ── setup ────────────────────────────────────────────────────────────────
+
+  private async mountCardFields(): Promise<void> {
+    const key = this.config.basisTheoryPublicKey;
+    if (!key) {
+      this.fail(new Error('WIZPay: card payments are not configured for this store.'));
+      return;
+    }
+
+    this.bt = await loadBasisTheory(key);
+    const style = btStyle(resolveTheme(this.config.theme));
+
+    this.elements.number = this.bt.createElement('cardNumber', { targetId: 'wzp-number', style });
+    this.elements.expiry = this.bt.createElement('cardExpirationDate', { targetId: 'wzp-expiry', style });
+    this.elements.cvc = this.bt.createElement('cardVerificationCode', { targetId: 'wzp-cvc', style });
+
+    await Promise.all([
+      this.elements.number!.mount('#wzp-number'),
+      this.elements.expiry!.mount('#wzp-expiry'),
+      this.elements.cvc!.mount('#wzp-cvc'),
+    ]);
+
+    // The card number element reports brand and BIN WITHOUT exposing the number.
+    // The BIN is what lets us re-quote before charging, so a debit card drops its
+    // surcharge in front of the shopper rather than surprising them on the receipt.
+    this.elements.number!.on('change', (event: BTChangeEvent) => {
+      this.cardComplete = Boolean(event.complete);
+      this.updatePayButton();
+      const funding = fundingFromEvent(event);
+      if (funding !== this.funding) {
+        this.funding = funding;
+        void this.requote();
+      }
+    });
+
+    for (const name of ['expiry', 'cvc'] as const) {
+      this.elements[name]!.on('change', () => this.updatePayButton());
+    }
+  }
+
+  private async loadSavedCards(): Promise<void> {
+    if (!this.session.methods.includes('card')) return;
+    try {
+      const { paymentMethods } = await this.client.savedMethods();
+      if (paymentMethods.length === 0) return;
+      this.renderSavedCards(paymentMethods);
+      this.show('save-card-row');
+    } catch {
+      // A session without a customer has no saved cards; that is not an error,
+      // and a shopper who has never paid here before must not see one.
+      this.show('save-card-row');
+    }
+  }
+
+  // ── pricing ──────────────────────────────────────────────────────────────
+
+  /** Ask the SERVER what this costs. The widget never computes a total. */
+  private async requote(): Promise<void> {
+    try {
+      this.pricing = await this.client.quote({
+        method: this.method,
+        funding: this.funding,
+        tip: this.tip,
+      });
+      this.renderSummary();
+      this.options.onPricingChange?.(this.pricing);
+    } catch (error) {
+      this.fail(error as Error);
+    }
+  }
+
+  private renderSummary(): void {
+    const el = this.q('summary');
+    if (el) {
+      el.innerHTML = summaryHtml(this.pricing, this.session.currency, this.config.locale, formatMoney);
+    }
+    const pay = this.q<HTMLButtonElement>('pay');
+    if (pay) {
+      pay.textContent = `Pay ${formatMoney(this.pricing.totalMinor, this.session.currency, this.config.locale)}`;
+    }
+  }
+
+  // ── payment ──────────────────────────────────────────────────────────────
+
+  private async pay(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    this.updatePayButton();
+    this.clearError();
+
+    try {
+      const result = await this.client.confirm({
+        method: this.method,
+        tip: this.tip,
+        ...(this.savedMethodId
+          ? { savedMethodId: this.savedMethodId }
+          : { tokenIntentId: await this.tokenize() }),
+        saveCard: this.q<HTMLInputElement>('save-card')?.checked ?? false,
+        holderName: this.q<HTMLInputElement>('holder')?.value.trim(),
+        email: this.q<HTMLInputElement>('email')?.value.trim(),
+        billingAddress: { ...(this.address?.value() ?? {}) },
+        browserInfo: collectBrowserInfo(),
+      });
+
+      if (result.status === 'requires_action') {
+        this.handleAction(result);
+        return;
+      }
+      if (result.status === 'failed') {
+        // A decline is recoverable: keep the form, show why, let them retry.
+        this.showError(result.failureReason ?? 'Your payment was declined. Please try another card.');
+        return;
+      }
+      this.options.onSuccess?.(result);
+    } catch (error) {
+      this.fail(error as Error);
+    } finally {
+      this.busy = false;
+      this.updatePayButton();
+    }
+  }
+
+  /**
+   * Send the card to Basis Theory and keep only the id.
+   *
+   * A token INTENT, not a token: it expires on its own in about a day, so an
+   * abandoned checkout leaves nothing PCI-scoped behind. It is promoted to a
+   * durable token only if the shopper asked to save the card AND the payment
+   * succeeded.
+   */
+  private async tokenize(): Promise<string> {
+    if (!this.bt) throw new Error('WIZPay: secure card fields are not ready yet.');
+    const intent = await this.bt.tokenIntents.create({
+      type: 'card',
+      card: {
+        number: this.elements.number,
+        expiration_month: this.elements.expiry,
+        expiration_year: this.elements.expiry,
+        cvc: this.elements.cvc,
+      },
+    });
+    return intent.id;
+  }
+
+  /** 3DS: send the shopper to the issuer and come back via returnUrl. */
+  private handleAction(result: ConfirmResult): void {
+    const url = (result.action as { url?: unknown } | undefined)?.url;
+    if (typeof url === 'string' && url) {
+      window.location.assign(url);
+      return;
+    }
+    this.showError('Your bank needs to verify this payment, but we could not open the verification step.');
+  }
+
+  // ── ui wiring ────────────────────────────────────────────────────────────
+
+  private bindUi(): void {
+    this.q('pay')?.addEventListener('click', () => void this.pay());
+
+    this.address = new AddressInput(this.root, this.client, () => this.updatePayButton());
+    this.address.attach();
+
+    this.q('tabs')?.addEventListener('click', (event) => {
+      const tab = (event.target as HTMLElement).closest<HTMLElement>('[data-method]');
+      if (!tab) return;
+      this.method = tab.dataset.method ?? 'card';
+      for (const t of Array.from(this.root.querySelectorAll('[data-method]'))) {
+        t.setAttribute('aria-selected', String(t === tab));
+      }
+      this.toggle('card-panel', this.method === 'card');
+      this.toggle('ach-panel', this.method === 'ach');
+      this.updatePayButton();
+      void this.requote();
+    });
+
+    this.q('tips')?.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>('[data-tip]');
+      if (!button) return;
+      const choice = button.dataset.tip;
+      for (const b of Array.from(this.root.querySelectorAll('[data-tip]'))) {
+        b.setAttribute('aria-pressed', String(b === button));
+      }
+      const custom = this.q<HTMLInputElement>('tip-custom');
+      if (custom) custom.hidden = choice !== 'custom';
+
+      this.tip =
+        choice === 'none' ? undefined
+        : choice === 'custom' ? { customMinor: toMinor(custom?.value) }
+        : { presetIndex: Number(choice) };
+      void this.requote();
+    });
+
+    this.q('tip-custom')?.addEventListener('input', (event) => {
+      this.tip = { customMinor: toMinor((event.target as HTMLInputElement).value) };
+      void this.requote();
+    });
+
+    for (const name of ['holder', 'email']) {
+      this.q(name)?.addEventListener('input', () => this.updatePayButton());
+    }
+  }
+
+  private renderSavedCards(methods: SavedMethod[]): void {
+    const list = this.q('saved-list');
+    if (!list) return;
+
+    list.innerHTML = methods
+      .map(
+        (m) =>
+          `<button class="wzp__card" type="button" data-saved="${m.id}" aria-pressed="false">
+             <span>${(m.brand ?? 'Card').toUpperCase()} ···· ${m.last4 ?? '••••'}</span>
+             <span class="wzp__muted" style="margin-left:auto">${m.expMonth ?? ''}/${m.expYear ?? ''}</span>
+           </button>`,
+      )
+      .join('') + '<button class="wzp__card" type="button" data-saved="new" aria-pressed="true">Use a new card</button>';
+
+    list.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>('[data-saved]');
+      if (!button) return;
+      for (const b of Array.from(list.querySelectorAll('[data-saved]'))) {
+        b.setAttribute('aria-pressed', String(b === button));
+      }
+      const id = button.dataset.saved;
+      this.savedMethodId = id === 'new' ? undefined : id;
+      // A saved card's funding is known server-side; re-quote so the surcharge
+      // shown matches the card actually being charged.
+      this.toggle('card-panel', !this.savedMethodId);
+      this.toggle('save-card-row', !this.savedMethodId);
+      this.updatePayButton();
+      void this.requote();
+    });
+
+    this.show('saved');
+  }
+
+  /**
+   * The pay button is enabled only when the request would actually be complete.
+   * A shopper who taps Pay and gets a validation error has been failed by the
+   * form, not by their card.
+   */
+  private updatePayButton(): void {
+    const pay = this.q<HTMLButtonElement>('pay');
+    if (!pay) return;
+
+    const addressOk = this.address?.isComplete() ?? false;
+    const instrumentOk =
+      this.method === 'ach'
+        ? Boolean(this.q<HTMLInputElement>('routing')?.value && this.q<HTMLInputElement>('account')?.value)
+        : Boolean(this.savedMethodId) || this.cardComplete;
+
+    pay.disabled = this.busy || this.destroyed || !addressOk || !instrumentOk;
+  }
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  private q<T extends HTMLElement = HTMLElement>(name: string): T | null {
+    return this.root?.querySelector<T>(`[data-wzp="${name}"]`) ?? null;
+  }
+
+  private toggle(name: string, visible: boolean): void {
+    const el = this.q(name);
+    if (el) el.hidden = !visible;
+  }
+
+  private show(name: string): void {
+    this.toggle(name, true);
+  }
+
+  private showError(message: string): void {
+    const el = this.q('error');
+    if (el) {
+      el.textContent = message;
+      el.hidden = false;
+    }
+  }
+
+  private clearError(): void {
+    const el = this.q('error');
+    if (el) el.hidden = true;
+  }
+
+  private fail(error: Error): void {
+    this.showError(error.message);
+    this.options.onError?.(error);
+  }
+}
+
+function resolveElement(selector: string | HTMLElement): HTMLElement {
+  if (typeof selector !== 'string') return selector;
+  const el = document.querySelector<HTMLElement>(selector);
+  if (!el) throw new Error(`WIZPay: no element matches "${selector}". Add it before calling mount().`);
+  return el;
+}
+
+/** The store a session belongs to, for the public-config lookup. */
+function sessionStoreId(session: SessionView & { storeId?: string }): string {
+  return session.storeId ?? '';
+}
+
+/** BT exposes brand/BIN without the number; map it to our funding vocabulary. */
+function fundingFromEvent(event: BTChangeEvent): string {
+  const raw = (event as { cardFunding?: string }).cardFunding?.toLowerCase();
+  return raw === 'credit' || raw === 'debit' || raw === 'prepaid' ? raw : 'unknown';
+}
+
+function toMinor(value: string | undefined): number {
+  const n = Number.parseFloat(value ?? '');
+  return Number.isFinite(n) && n > 0 ? Math.round(Number(`${n}e2`)) : 0;
+}
+
+function btStyle(theme: 'light' | 'dark'): Record<string, unknown> {
+  const color = theme === 'dark' ? '#e9edf2' : '#16191d';
+  return {
+    base: {
+      color,
+      fontSize: '15px',
+      fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif',
+      '::placeholder': { color: theme === 'dark' ? '#9aa6b2' : '#8a94a0' },
+    },
+    invalid: { color: theme === 'dark' ? '#f97066' : '#b42318' },
+  };
+}

@@ -130,6 +130,20 @@ export class CheckoutSessionClient {
     });
   }
 
+  /**
+   * Hand the issuer's 3D Secure result back so the payment can resolve.
+   *
+   * Does not re-consume the session: confirm already did, and the shopper is
+   * legitimately mid-authentication. The details payload comes from the issuer
+   * and is meaningless without the original payment.
+   */
+  details(details: Record<string, unknown>): Promise<ConfirmResult> {
+    return this.http.post<ConfirmResult>(`/v1/checkout/sessions/${this.sessionId}/details`, {
+      clientSecret: this.clientSecret,
+      details,
+    });
+  }
+
   autocompleteAddress(input: string, sessionToken?: string, country?: string) {
     return this.http.post<{ suggestions: Array<{ placeId: string; text: string }> }>(
       '/v1/checkout/places/autocomplete',

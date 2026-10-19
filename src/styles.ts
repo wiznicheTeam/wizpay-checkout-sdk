@@ -46,6 +46,8 @@ export function widgetStyles(): string {
 .wzp__card[aria-pressed="true"]{border-color:var(--wzp-brand);box-shadow:inset 0 0 0 1px var(--wzp-brand)}
 .wzp__check{display:flex;align-items:flex-start;gap:9px;margin-bottom:var(--wzp-gap);font-size:14px;cursor:pointer}
 .wzp__ac{position:relative}
+.wzp__threeds{min-height:420px;border:1px solid var(--wzp-line);border-radius:var(--wzp-radius);overflow:hidden;background:var(--wzp-surface)}
+.wzp__threeds[hidden]{display:none}
 .wzp__list{position:absolute;z-index:20;left:0;right:0;margin-top:2px;padding:0;list-style:none;max-height:210px;overflow:auto;border:1px solid var(--wzp-line);border-radius:var(--wzp-radius);background:var(--wzp-surface);box-shadow:0 8px 24px rgba(0,0,0,.14)}
 .wzp__opt{padding:9px 12px;cursor:pointer;font-size:14px}
 .wzp__opt:hover,.wzp__opt[aria-selected="true"]{background:var(--wzp-surface-2)}

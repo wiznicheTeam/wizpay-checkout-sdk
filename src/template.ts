@@ -30,6 +30,13 @@ export function widgetHtml(input: {
 
   <div class="wzp__error" data-wzp="error" hidden role="alert"></div>
 
+  <!-- 3D Secure renders here. Kept OUTSIDE the form wrapper so hiding the form
+       for a challenge never unmounts the card iframes, which would lose the
+       card the shopper already typed. -->
+  <div class="wzp__threeds" data-wzp="threeds" hidden></div>
+
+  <div data-wzp="form">
+
   ${methods.length > 1 ? methodTabs(methods) : ''}
 
   <div data-wzp="saved" hidden>
@@ -94,6 +101,7 @@ export function widgetHtml(input: {
     : ''}
 
   <button class="wzp__pay" data-wzp="pay" type="button" disabled>Pay</button>
+  </div>
 
   ${config.termsUrl
     ? `<p class="wzp__muted">By paying you agree to the <a href="${escapeHtml(config.termsUrl)}" target="_blank" rel="noopener noreferrer">terms</a>.</p>`

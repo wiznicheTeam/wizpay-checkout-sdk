@@ -3,6 +3,7 @@ import { loadBasisTheory, type BTChangeEvent, type BTElement, type BasisTheory }
 import { formatMoney } from './format';
 import { resolveMode } from './environment';
 import { injectStyles, resolveTheme } from './styles';
+import { isNativeThreeDS, runThreeDS, type ThreeDSAction } from './threeds';
 import { summaryHtml, widgetHtml } from './template';
 import {
   CheckoutSessionClient,
@@ -23,6 +24,12 @@ export interface MountOptions {
   selector: string | HTMLElement;
   /** Point at another WIZPay deployment. Most integrations never set this. */
   apiBase?: string;
+  /**
+   * Where the 3D Secure return page is served from. Defaults to the CDN the
+   * SDK ships on. Must be an origin WIZPay controls — the checkout pins it when
+   * accepting the issuer's result.
+   */
+  threeDSReturnUrl?: string;
   onSuccess?: (result: ConfirmResult) => void;
   onError?: (error: Error) => void;
   /** Fires whenever the total changes (method, tip, or card type). */
@@ -204,7 +211,7 @@ export class CheckoutWidget {
       });
 
       if (result.status === 'requires_action') {
-        this.handleAction(result);
+        await this.handleAction(result);
         return;
       }
       if (result.status === 'failed') {
@@ -243,14 +250,77 @@ export class CheckoutWidget {
     return intent.id;
   }
 
-  /** 3DS: send the shopper to the issuer and come back via returnUrl. */
-  private handleAction(result: ConfirmResult): void {
-    const url = (result.action as { url?: unknown } | undefined)?.url;
+  /**
+   * The shopper's bank wants to verify the payment.
+   *
+   * Native 3DS2 runs in an iframe on this page: usually invisibly, and with a
+   * visible step only when the issuer insists. Falling back to a redirect only
+   * when the provider gives us nothing else, because sending a shopper away to
+   * their bank loses a meaningful share of them.
+   */
+  private async handleAction(result: ConfirmResult): Promise<void> {
+    const action = result.action as ThreeDSAction | undefined;
+
+    if (isNativeThreeDS(action)) {
+      await this.runNativeThreeDS(action as ThreeDSAction);
+      return;
+    }
+
+    const url = action?.url;
     if (typeof url === 'string' && url) {
       window.location.assign(url);
       return;
     }
     this.showError('Your bank needs to verify this payment, but we could not open the verification step.');
+  }
+
+  /** Run the issuer's 3DS2 step, then hand the result back to the API. */
+  private async runNativeThreeDS(action: ThreeDSAction): Promise<void> {
+    const container = this.q('threeds');
+    if (!container) return;
+
+    const challenge = action.subtype === 'challenge';
+    // Only take over the form for a step the shopper can actually see.
+    if (challenge) {
+      this.toggle('threeds', true);
+      this.setFormVisible(false);
+    }
+
+    try {
+      const { details } = await runThreeDS(action, {
+        returnPageUrl: this.options.threeDSReturnUrl ?? DEFAULT_THREEDS_RETURN,
+        container,
+      });
+
+      const settled = await this.client.details(details);
+      if (settled.status === 'succeeded') {
+        this.options.onSuccess?.(settled);
+        return;
+      }
+      if (settled.status === 'requires_action') {
+        // The issuer asked for a second step: fingerprint, then challenge.
+        await this.runNativeThreeDS(settled.action as ThreeDSAction);
+        return;
+      }
+      this.restoreAfterChallenge(challenge);
+      this.showError(settled.failureReason ?? 'Your bank could not verify this payment.');
+    } catch (error) {
+      this.restoreAfterChallenge(challenge);
+      this.fail(error as Error);
+    }
+  }
+
+  private restoreAfterChallenge(wasChallenge: boolean): void {
+    if (!wasChallenge) return;
+    this.toggle('threeds', false);
+    this.setFormVisible(true);
+  }
+
+  /** Hide the form behind the challenge without unmounting the card iframes —
+   *  re-mounting them would lose the entered card. */
+  private setFormVisible(visible: boolean): void {
+    const form = this.q('form');
+    if (form) form.hidden = !visible;
   }
 
   // ── ui wiring ────────────────────────────────────────────────────────────
@@ -385,6 +455,9 @@ export class CheckoutWidget {
     this.options.onError?.(error);
   }
 }
+
+/** The SDK's own CDN origin — the checkout pins it when accepting 3DS results. */
+const DEFAULT_THREEDS_RETURN = 'https://js.wizpay.ai/v1/3ds-return.html';
 
 function resolveElement(selector: string | HTMLElement): HTMLElement {
   if (typeof selector !== 'string') return selector;

@@ -171,6 +171,21 @@ ledger account.
 
 ---
 
+## WooCommerce
+
+A WooCommerce gateway lives in `wordpress/wizpay-checkout-woocommerce/`. It has
+**no Composer dependencies** — WordPress loads every plugin into one PHP
+process, and two plugins shipping different versions of the same library is a
+well-known way to break a site that has nothing to do with either of them. It
+talks to the REST API through `wp_remote_post()` instead.
+
+Payment happens on WooCommerce's order-pay page rather than inline at checkout,
+so the session is created once the order total is final and the amount cannot
+drift while the customer edits their cart.
+
+Orders are marked paid by the **webhook**, not by the browser — a customer who
+closes the tab the moment their card clears still gets their order.
+
 ## Licence
 
 MIT

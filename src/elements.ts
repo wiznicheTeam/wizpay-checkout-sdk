@@ -16,6 +16,13 @@ export interface BTElement {
   unmount?(): void;
   on(event: string, handler: (payload: BTChangeEvent) => void): void;
   clear?(): void;
+  /**
+   * Expiry only. One element holds "MM / YY", and the vault needs the two parts
+   * separately, so it hands out these parsers rather than a readable value.
+   * Passing the element itself for both resolves each to the whole "03 / 30".
+   */
+  month?(): unknown;
+  year?(): unknown;
 }
 
 export interface BTChangeEvent {
@@ -33,7 +40,10 @@ export interface BasisTheory {
   createElement(type: string, options: Record<string, unknown>): BTElement;
   createToken?(payload: unknown): Promise<{ id: string }>;
   tokenIntents: {
-    create(payload: { type: string; card: unknown }): Promise<{ id: string; card?: Record<string, unknown> }>;
+    // `data`, not `card`. The vault answers a `card` key with
+    // "'data' or 'encrypted' is required", and typing it as `card` here is what
+    // let the wrong payload compile.
+    create(payload: { type: string; data: unknown }): Promise<{ id: string; card?: Record<string, unknown> }>;
   };
 }
 

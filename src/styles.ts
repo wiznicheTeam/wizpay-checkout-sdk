@@ -24,6 +24,12 @@ export function widgetStyles(): string {
 .wzp__badge{margin-left:auto;padding:2px 8px;border-radius:999px;background:#fff3cd;color:#8a6100;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
 .wzp__field{margin-bottom:var(--wzp-gap)}
 .wzp__label{display:block;margin-bottom:6px;font-size:13px;font-weight:600}
+/* Each address input names itself. A placeholder is not a label: it disappears
+   the moment someone types, so a half-filled form stops saying what its fields
+   are, and screen readers treat it as a hint rather than a name. */
+.wzp__sublabel{display:block;margin:0 0 4px;font-size:12px;font-weight:500;color:var(--wzp-muted)}
+.wzp__row>div{min-width:0}
+.wzp__optional{font-weight:400;opacity:.75}
 .wzp__input,.wzp__bt{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--wzp-line);border-radius:var(--wzp-radius);background:var(--wzp-surface);color:var(--wzp-text);font-size:15px}
 .wzp__input:focus{outline:2px solid var(--wzp-brand);outline-offset:1px}
 .wzp__bt{padding:0 12px;display:flex;align-items:center}

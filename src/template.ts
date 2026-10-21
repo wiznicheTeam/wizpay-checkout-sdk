@@ -138,16 +138,34 @@ function tipBlock(session: SessionView): string {
 function addressBlock(): string {
   return `
   <div class="wzp__field wzp__ac" data-wzp="address">
-    <label class="wzp__label" for="wzp-street">Billing address</label>
-    <input class="wzp__input" id="wzp-street" data-wzp="street" autocomplete="off" placeholder="Start typing your address">
+    <span class="wzp__label">Billing address</span>
+
+    <label class="wzp__sublabel" for="wzp-street">Street address</label>
+    <input class="wzp__input" id="wzp-street" data-wzp="street" autocomplete="address-line1"
+           placeholder="788 Mount Vernon Avenue">
     <ul class="wzp__list" data-wzp="ac-list" role="listbox" hidden></ul>
+
     <div class="wzp__row" style="margin-top:10px">
-      <input class="wzp__input" data-wzp="house" autocomplete="address-line2" placeholder="Apt / unit">
-      <input class="wzp__input" data-wzp="city" autocomplete="address-level2" placeholder="City">
+      <div>
+        <label class="wzp__sublabel" for="wzp-apt">Apt / suite <span class="wzp__optional">optional</span></label>
+        <input class="wzp__input" id="wzp-apt" data-wzp="apt" autocomplete="address-line2" placeholder="Apt 4B">
+      </div>
+      <div>
+        <label class="wzp__sublabel" for="wzp-city">City</label>
+        <input class="wzp__input" id="wzp-city" data-wzp="city" autocomplete="address-level2" placeholder="Columbus">
+      </div>
     </div>
+
     <div class="wzp__row" style="margin-top:10px">
-      <input class="wzp__input" data-wzp="state" autocomplete="address-level1" placeholder="State" maxlength="2">
-      <input class="wzp__input" data-wzp="postal" autocomplete="postal-code" placeholder="ZIP">
+      <div>
+        <label class="wzp__sublabel" for="wzp-state">State</label>
+        <input class="wzp__input" id="wzp-state" data-wzp="state" autocomplete="address-level1"
+               placeholder="OH" maxlength="2">
+      </div>
+      <div>
+        <label class="wzp__sublabel" for="wzp-postal">ZIP code</label>
+        <input class="wzp__input" id="wzp-postal" data-wzp="postal" autocomplete="postal-code" placeholder="43203">
+      </div>
     </div>
     <input type="hidden" data-wzp="country" value="US">
   </div>`;

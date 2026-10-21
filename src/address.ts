@@ -39,9 +39,18 @@ export class AddressInput {
   /** The address as currently entered, whether picked or typed. */
   value(): AddressFields {
     const get = (name: string) => this.root.querySelector<HTMLInputElement>(`[data-wzp="${name}"]`)?.value.trim() ?? '';
+
+    // Shoppers write one line, "788 Mount Vernon Avenue", and an apartment is a
+    // separate thing from a street number. The PROCESSOR wants the house number
+    // apart from the street name, so split it here rather than making someone
+    // type their street number into a box labelled "unit".
+    const line = get('street');
+    const [, number = '', name = ''] = /^\s*([0-9]+[A-Za-z-]*)\s+(.*)$/.exec(line) ?? [];
+    const apt = get('apt');
+
     return {
-      street: get('street'),
-      houseNumberOrName: get('house'),
+      street: name || line,
+      houseNumberOrName: [number, apt].filter(Boolean).join(' '),
       city: get('city'),
       stateOrProvince: get('state'),
       postalCode: get('postal'),
@@ -123,9 +132,10 @@ export class AddressInput {
       const el = this.root.querySelector<HTMLInputElement>(`[data-wzp="${name}"]`);
       if (el && value) el.value = value;
     };
-    // Google gives the street number separately; Adyen wants it separately too.
-    set('street', address.street);
-    set('house', address.houseNumberOrName);
+    // Google returns the number apart from the road. Join them back into the one
+    // line a person recognises as their street address; value() splits it again
+    // on the way out. The apartment is never Google's to fill.
+    set('street', [address.houseNumberOrName, address.street].filter(Boolean).join(' '));
     set('city', address.city);
     set('state', address.stateOrProvince);
     set('postal', address.postalCode);

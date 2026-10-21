@@ -276,12 +276,21 @@ export class CheckoutWidget {
     // vault and this page only ever holds the resulting id.
     if (this.method === 'ach') return this.tokenizeBank();
 
+    const expiry = this.elements.expiry!;
+    if (typeof expiry.month !== 'function' || typeof expiry.year !== 'function') {
+      throw new Error('WIZPay: the secure expiry field did not initialise correctly.');
+    }
+
     const intent = await this.bt.tokenIntents.create({
       type: 'card',
-      card: {
+      // `data`, not `card`: the vault rejects anything else with
+      // "'data' or 'encrypted' is required".
+      data: {
         number: this.elements.number,
-        expiration_month: this.elements.expiry,
-        expiration_year: this.elements.expiry,
+        // One element holds "MM / YY". Handing it to BOTH fields sent
+        // expiration_month and expiration_year as the same "03 / 30" string.
+        expiration_month: expiry.month(),
+        expiration_year: expiry.year(),
         cvc: this.elements.cvc,
       },
     });

@@ -91,3 +91,48 @@ describe('the pay button waits for every card field', () => {
     expect(canPay({ number: true, expiry: true, cvc: true })).toBe(true);
   });
 });
+
+/**
+ * The vault takes `data`, and the expiry is ONE element holding "MM / YY" that
+ * must be split with .month()/.year(). The widget sent `card` and passed the
+ * same element to both parts, so every tokenization failed:
+ *
+ *   {"type":"card","card":{"number":"...","expiration_month":"03 / 30",
+ *                          "expiration_year":"03 / 30","cvc":"7373"}}
+ *   400  {"errors":{"data":["'data' or 'encrypted' is required"]}}
+ *
+ * The SDK's own type declared `card`, so the wrong payload compiled. Assert the
+ * shape the vault actually accepts.
+ */
+describe('the token-intent payload matches what the vault accepts', () => {
+  const buildPayload = (elements: {
+    number: unknown;
+    expiry: { month(): unknown; year(): unknown };
+    cvc: unknown;
+  }) => ({
+    type: 'card',
+    data: {
+      number: elements.number,
+      expiration_month: elements.expiry.month(),
+      expiration_year: elements.expiry.year(),
+      cvc: elements.cvc,
+    },
+  });
+
+  const expiry = { month: () => 'MONTH', year: () => 'YEAR' };
+
+  it('puts the card fields under `data`, never `card`', () => {
+    const payload = buildPayload({ number: 'NUM', expiry, cvc: 'CVC' });
+
+    expect(payload).toHaveProperty('data');
+    expect(payload).not.toHaveProperty('card');
+  });
+
+  it('splits the single expiry element into month and year', () => {
+    const { data } = buildPayload({ number: 'NUM', expiry, cvc: 'CVC' });
+
+    expect(data.expiration_month).toBe('MONTH');
+    expect(data.expiration_year).toBe('YEAR');
+    expect(data.expiration_month).not.toBe(data.expiration_year);
+  });
+});

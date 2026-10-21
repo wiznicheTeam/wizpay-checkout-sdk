@@ -21,6 +21,12 @@ export function widgetStyles(): string {
 .wzp__head{display:flex;align-items:center;gap:10px;margin-bottom:var(--wzp-gap)}
 .wzp__logo{max-height:28px;max-width:140px}
 .wzp__name{font-weight:700}
+/* Attribution belongs under the button, not above the form. The merchant's own
+   brand owns the top of their checkout; ours only needs to say who handled the
+   payment. */
+.wzp__powered{display:flex;align-items:center;justify-content:center;gap:5px;margin-top:12px;color:var(--wzp-muted);font-size:11px;letter-spacing:.2px}
+.wzp__poweredlogo{height:13px;max-width:72px;opacity:.85}
+.wzp__poweredname{font-weight:600}
 .wzp__badge{margin-left:auto;padding:2px 8px;border-radius:999px;background:#fff3cd;color:#8a6100;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
 .wzp__field{margin-bottom:var(--wzp-gap)}
 .wzp__label{display:block;margin-bottom:6px;font-size:13px;font-weight:600}
@@ -46,6 +52,24 @@ export function widgetStyles(): string {
 .wzp__muted{color:var(--wzp-muted);font-size:13px}
 .wzp__pay{width:100%;min-height:48px;border:0;border-radius:var(--wzp-radius);background:var(--wzp-brand);color:#fff;font:inherit;font-size:16px;font-weight:700;cursor:pointer}
 .wzp__pay:disabled{opacity:.55;cursor:not-allowed}
+.wzp__pay[data-busy="true"]{cursor:progress}
+/* Sits inside the button so its width does not jump between states. */
+.wzp__spinner{display:inline-block;width:15px;height:15px;margin-right:8px;vertical-align:-2px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:wzp-spin .7s linear infinite}
+@keyframes wzp-spin{to{transform:rotate(360deg)}}
+
+/* The shape of the form, shown while the session, the config and the vault's
+   iframes are still loading. A blank box for a second on a payment page reads
+   as a broken page, and people leave. */
+.wzp__skeleton{display:block}
+.wzp__sk{border-radius:var(--wzp-radius);background:var(--wzp-surface-2);animation:wzp-pulse 1.4s ease-in-out infinite}
+.wzp__sk--label{height:11px;width:38%;margin-bottom:8px;border-radius:4px}
+.wzp__sk--field{height:44px;margin-bottom:var(--wzp-gap)}
+.wzp__sk--pay{height:48px;margin-top:4px}
+@keyframes wzp-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){
+  .wzp__sk{animation:none}
+  .wzp__spinner{animation-duration:2.4s}
+}
 .wzp__error{margin-bottom:var(--wzp-gap);padding:10px 12px;border-radius:var(--wzp-radius);background:rgba(180,35,24,.1);color:var(--wzp-danger);font-size:14px}
 .wzp__error--notice{background:rgba(0,90,160,.1);color:var(--wzp-brand)}
 .wzp__saved{display:flex;flex-direction:column;gap:8px;margin-bottom:var(--wzp-gap)}

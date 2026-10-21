@@ -1,10 +1,10 @@
 import { AddressInput } from './address.js';
 import { loadBasisTheory, type BTChangeEvent, type BTElement, type BasisTheory } from './elements.js';
-import { formatMoney } from './format.js';
+import { formatMoney, escapeHtml } from './format.js';
 import { resolveMode } from './environment.js';
 import { injectStyles, resolveTheme } from './styles.js';
 import { isNativeThreeDS, runThreeDS, type ThreeDSAction } from './threeds.js';
-import { summaryHtml, widgetHtml } from './template.js';
+import { summaryHtml, widgetHtml, skeletonHtml } from './template.js';
 import {
   CheckoutSessionClient,
   collectBrowserInfo,
@@ -30,6 +30,20 @@ export interface MountOptions {
    * accepting the issuer's result.
    */
   threeDSReturnUrl?: string;
+  /**
+   * Hide the built-in Pay button and drive the payment from your own UI.
+   *
+   * Call `submit()` when your button is pressed, and use `onReadyChange` to
+   * know when pressing it would actually work. Everything else, including the
+   * amount, still comes from the session, so your button cannot change what is
+   * charged any more than ours can.
+   */
+  hidePayButton?: boolean;
+  /**
+   * Whether the form is currently payable, and whether a payment is in flight.
+   * Fires on every change, so your own button can mirror the built-in one.
+   */
+  onReadyChange?: (state: { ready: boolean; busy: boolean }) => void;
   onSuccess?: (result: ConfirmResult) => void;
   onError?: (error: Error) => void;
   /** Fires whenever the total changes (method, tip, or card type). */
@@ -73,6 +87,12 @@ export class CheckoutWidget {
    */
   private theme: 'light' | 'dark' = 'light';
 
+  /** Last state reported through onReadyChange, so it only fires on a change. */
+  private lastReady = false;
+  private lastBusy = false;
+  /** The button's resting label, kept so the spinner can be swapped back out. */
+  private payLabel = 'Pay';
+
   private cardFields: Record<'number' | 'expiry' | 'cvc', boolean> = {
     number: false,
     expiry: false,
@@ -97,6 +117,13 @@ export class CheckoutWidget {
     this.root = resolveElement(this.options.selector);
     injectStyles();
 
+    // Paint the form's shape before any network call. The session, the store
+    // config and the vault's iframes all have to load, and an empty box on a
+    // payment page for that long reads as broken.
+    // The real theme needs the store config, which has not loaded yet, so the
+    // skeleton reads the page the same way 'auto' will.
+    this.root.innerHTML = skeletonHtml(resolveTheme('auto', this.root));
+
     this.session = await this.client.load();
     this.config = await this.client.config(sessionStoreId(this.session));
     this.pricing = this.session.pricing;
@@ -106,6 +133,7 @@ export class CheckoutWidget {
     this.theme = resolveTheme(this.config.theme, this.root);
 
     this.root.innerHTML = widgetHtml({
+      hidePayButton: this.options.hidePayButton,
       session: this.session,
       config: this.config,
       theme: this.theme,
@@ -206,10 +234,11 @@ export class CheckoutWidget {
     if (el) {
       el.innerHTML = summaryHtml(this.pricing, this.session.currency, this.config.locale, formatMoney);
     }
-    const pay = this.q<HTMLButtonElement>('pay');
-    if (pay) {
-      pay.textContent = `Pay ${formatMoney(this.pricing.totalMinor, this.session.currency, this.config.locale)}`;
-    }
+    // Hold the label rather than writing it straight to the button: while a
+    // payment is in flight the button shows a spinner, and re-pricing must not
+    // overwrite that.
+    this.payLabel = `Pay ${formatMoney(this.pricing.totalMinor, this.session.currency, this.config.locale)}`;
+    this.updatePayButton();
   }
 
   // ── payment ──────────────────────────────────────────────────────────────
@@ -482,10 +511,8 @@ export class CheckoutWidget {
    * A shopper who taps Pay and gets a validation error has been failed by the
    * form, not by their card.
    */
-  private updatePayButton(): void {
-    const pay = this.q<HTMLButtonElement>('pay');
-    if (!pay) return;
-
+  /** Whether the form holds everything a charge needs. */
+  private isReady(): boolean {
     const addressOk = this.address?.isComplete() ?? false;
     const instrumentOk =
       this.method === 'ach'
@@ -493,7 +520,45 @@ export class CheckoutWidget {
         : Boolean(this.savedMethodId) ||
           (this.cardFields.number && this.cardFields.expiry && this.cardFields.cvc);
 
-    pay.disabled = this.busy || this.destroyed || !addressOk || !instrumentOk;
+    return addressOk && instrumentOk && !this.destroyed;
+  }
+
+  private updatePayButton(): void {
+    const ready = this.isReady();
+
+    // Tell the merchant's own button first: it may be the only one on the page.
+    if (ready !== this.lastReady || this.busy !== this.lastBusy) {
+      this.lastReady = ready;
+      this.lastBusy = this.busy;
+      this.options.onReadyChange?.({ ready, busy: this.busy });
+    }
+
+    const pay = this.q<HTMLButtonElement>('pay');
+    if (!pay) return;
+
+    pay.disabled = this.busy || !ready;
+    pay.dataset.busy = String(this.busy);
+    // A payment takes seconds, and a button that only greys out looks like a
+    // page that ignored the click. Say what is happening.
+    pay.innerHTML = this.busy
+      ? '<span class="wzp__spinner" aria-hidden="true"></span>Processing…'
+      : escapeHtml(this.payLabel);
+    pay.setAttribute('aria-busy', String(this.busy));
+  }
+
+  /**
+   * Take the payment.
+   *
+   * Public so a merchant can hide the built-in button and drive this from their
+   * own. It changes nothing about what is charged: the amount comes from the
+   * session, exactly as it does for our button.
+   */
+  async submit(): Promise<void> {
+    if (this.busy) return;
+    if (!this.isReady()) {
+      throw new Error('WIZPay: the payment details are not complete yet.');
+    }
+    await this.pay();
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────

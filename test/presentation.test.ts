@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { resolveTheme } from '../src/styles.js';
 import { shopperMessage } from '../src/widget.js';
+import { collectBrowserInfo } from '../src/session.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -134,5 +135,30 @@ describe('the token-intent payload matches what the vault accepts', () => {
     expect(data.expiration_month).toBe('MONTH');
     expect(data.expiration_year).toBe('YEAR');
     expect(data.expiration_month).not.toBe(data.expiration_year);
+  });
+});
+
+/**
+ * Adyen validates BrowserInfo strictly and rejects the whole payment for one
+ * unknown key: "Structure of BrowserInfo contains the following unknown
+ * fields: [origin]". Only the 3DS2-defined fields may be sent.
+ */
+describe('browserInfo carries only what 3DS2 defines', () => {
+  const ALLOWED = [
+    'acceptHeader', 'colorDepth', 'javaEnabled', 'javaScriptEnabled',
+    'language', 'screenHeight', 'screenWidth', 'timeZoneOffset', 'userAgent',
+  ];
+
+  it('sends no key outside the 3DS2 set, origin included', () => {
+    vi.stubGlobal('window', {
+      navigator: { userAgent: 'UA', language: 'en-US' },
+      screen: { colorDepth: 24, height: 1080, width: 1920 },
+      location: { origin: 'https://shop.example.com' },
+    });
+
+    const info = collectBrowserInfo();
+
+    expect(Object.keys(info).sort()).toEqual([...ALLOWED].sort());
+    expect(info).not.toHaveProperty('origin');
   });
 });

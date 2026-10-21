@@ -165,7 +165,7 @@ export class CheckoutSessionClient {
  * though nothing in our own flow reads it.
  */
 export function collectBrowserInfo(): Record<string, unknown> {
-  const { navigator: nav, screen, location } = window;
+  const { navigator: nav, screen } = window;
   return {
     acceptHeader: '*/*',
     userAgent: nav.userAgent,
@@ -175,6 +175,11 @@ export function collectBrowserInfo(): Record<string, unknown> {
     screenWidth: screen.width,
     timeZoneOffset: new Date().getTimezoneOffset(),
     javaEnabled: false,
-    origin: location.origin,
+    // Adyen validates BrowserInfo strictly and rejects the whole payment for an
+    // unknown key: "Structure of BrowserInfo contains the following unknown
+    // fields: [origin]". Only the 3DS2-defined fields belong here. The origin is
+    // already enforced server-side from the real Origin header, which a page
+    // cannot forge, so sending it was never doing any work.
+    javaScriptEnabled: true,
   };
 }

@@ -139,6 +139,30 @@ frame-src   https://*.basistheory.com
 connect-src https://api.wizpay.ai https://*.basistheory.com
 ```
 
+### Using your own pay button
+
+Hide ours and drive the payment from your own UI. The amount still comes from
+the session, so your button cannot change what is charged any more than ours
+can.
+
+```js
+const checkout = await WizPayCheckout.mount({
+  publishableKey, sessionId, clientSecret,
+  selector: '#wizpay-checkout',
+  hidePayButton: true,
+  onReadyChange: ({ ready, busy }) => {
+    myButton.disabled = !ready || busy;
+    myButton.textContent = busy ? 'Processing…' : 'Place order';
+  },
+  onSuccess: (payment) => { window.location = '/thank-you'; },
+});
+
+myButton.addEventListener('click', () => checkout.submit());
+```
+
+`submit()` rejects if the form is not complete, so `onReadyChange` is the
+signal to mirror, not something to re-derive.
+
 Address autocomplete needs **no Google entries** — it is proxied through the
 WIZPay API, so no Google key ever reaches the browser.
 

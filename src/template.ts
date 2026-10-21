@@ -14,19 +14,16 @@ export function widgetHtml(input: {
   config: PublicCheckoutConfig;
   theme: 'light' | 'dark';
   isTest: boolean;
+  /** Omit the built-in button when the merchant drives payment from their own. */
+  hidePayButton?: boolean;
 }): string {
-  const { session, config, theme, isTest } = input;
+  const { session, config, theme, isTest, hidePayButton } = input;
   const brand = config.branding;
   const methods = session.methods.length ? session.methods : ['card'];
 
   return `
 <div class="wzp" data-theme="${theme}" style="--wzp-brand:${escapeHtml(brand.brandColor)};--wzp-accent:${escapeHtml(brand.accentColor)}">
-  <div class="wzp__head">
-    ${brand.logoUrl
-      ? `<img class="wzp__logo" src="${escapeHtml(brand.logoUrl)}" alt="${escapeHtml(brand.displayName)}">`
-      : `<span class="wzp__name">${escapeHtml(brand.displayName)}</span>`}
-    ${isTest ? '<span class="wzp__badge" title="No real money will move">Test mode</span>' : ''}
-  </div>
+  ${isTest ? '<div class="wzp__head"><span class="wzp__badge" title="No real money will move">Test mode</span></div>' : ''}
 
   <div class="wzp__error" data-wzp="error" hidden role="alert"></div>
 
@@ -100,7 +97,14 @@ export function widgetHtml(input: {
     ? `<p class="wzp__muted" data-wzp="disclosure">${escapeHtml(session.surchargeDisclosure)}</p>`
     : ''}
 
-  <button class="wzp__pay" data-wzp="pay" type="button" disabled>Pay</button>
+  ${hidePayButton ? '' : '<button class="wzp__pay" data-wzp="pay" type="button" disabled>Pay</button>'}
+
+  <div class="wzp__powered">
+    <span>Powered by</span>
+    ${brand.logoUrl
+      ? `<img class="wzp__poweredlogo" src="${escapeHtml(brand.logoUrl)}" alt="${escapeHtml(brand.displayName)}">`
+      : `<span class="wzp__poweredname">${escapeHtml(brand.displayName)}</span>`}
+  </div>
   </div>
 
   ${config.termsUrl
@@ -186,4 +190,29 @@ export function summaryHtml(
   if (pricing.surchargeMinor > 0) parts.push(line('Card surcharge', pricing.surchargeMinor));
   parts.push(line('Total', pricing.totalMinor, 'wzp__line--total'));
   return parts.join('');
+}
+
+/**
+ * The form's shape, rendered immediately while the session, the store config
+ * and the vault's iframes load.
+ *
+ * `aria-hidden`, because there is nothing here to read: the live region that
+ * replaces it announces itself when the real form arrives.
+ */
+export function skeletonHtml(theme: 'light' | 'dark'): string {
+  const field = (labelWidth: string) =>
+    `<div class="wzp__sk wzp__sk--label" style="width:${labelWidth}"></div><div class="wzp__sk wzp__sk--field"></div>`;
+
+  return `
+<div class="wzp wzp__skeleton" data-theme="${theme}" aria-hidden="true">
+  ${field('30%')}
+  <div class="wzp__row">
+    <div>${field('52%')}</div>
+    <div>${field('58%')}</div>
+  </div>
+  ${field('34%')}
+  ${field('26%')}
+  <div class="wzp__sk wzp__sk--field"></div>
+  <div class="wzp__sk wzp__sk--pay"></div>
+</div>`.trim();
 }

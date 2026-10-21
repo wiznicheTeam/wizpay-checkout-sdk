@@ -1,4 +1,4 @@
-import type { PublicCheckoutConfig } from './session';
+import type { PublicCheckoutConfig } from './session.js';
 
 /**
  * The widget's styles, scoped under `.wzp` and injected once.

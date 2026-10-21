@@ -1,5 +1,5 @@
-import { escapeHtml, formatBps } from './format';
-import type { PublicCheckoutConfig, SessionView } from './session';
+import { escapeHtml, formatBps } from './format.js';
+import type { PublicCheckoutConfig, SessionView } from './session.js';
 
 /**
  * The widget's markup.

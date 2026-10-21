@@ -1,17 +1,17 @@
-import { CheckoutWidget, type MountOptions } from './widget';
+import { CheckoutWidget, type MountOptions } from './widget.js';
 
-export { CheckoutWidget } from './widget';
-export type { MountOptions } from './widget';
-export { WizPayError } from './client';
-export { isPublishableKey, keyMode, type KeyMode } from './environment';
-export { formatMoney } from './format';
+export { CheckoutWidget } from './widget.js';
+export type { MountOptions } from './widget.js';
+export { WizPayError } from './client.js';
+export { isPublishableKey, keyMode, type KeyMode } from './environment.js';
+export { formatMoney } from './format.js';
 export type {
   ConfirmResult,
   Pricing,
   PublicCheckoutConfig,
   SavedMethod,
   SessionView,
-} from './session';
+} from './session.js';
 
 /**
  * Render a WIZPay checkout into the page.

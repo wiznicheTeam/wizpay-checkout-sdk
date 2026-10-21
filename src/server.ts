@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { HttpClient, WizPayError, type ClientOptions } from './client';
-import { looksLikeSecretKey } from './environment';
+import { HttpClient, WizPayError, type ClientOptions } from './client.js';
+import { looksLikeSecretKey } from './environment.js';
 
 export { WizPayError };
 

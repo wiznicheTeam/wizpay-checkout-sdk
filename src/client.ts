@@ -1,4 +1,4 @@
-import { normalizeApiBase } from './environment';
+import { normalizeApiBase } from './environment.js';
 
 /** An error returned by the WIZPay API. */
 export class WizPayError extends Error {

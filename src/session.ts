@@ -1,4 +1,4 @@
-import { HttpClient, type ClientOptions } from './client';
+import { HttpClient, type ClientOptions } from './client.js';
 
 /** Public checkout config for a store (no rates, no secrets). */
 export interface PublicCheckoutConfig {

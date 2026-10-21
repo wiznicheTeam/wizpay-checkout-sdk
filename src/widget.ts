@@ -1,10 +1,10 @@
-import { AddressInput } from './address';
-import { loadBasisTheory, type BTChangeEvent, type BTElement, type BasisTheory } from './elements';
-import { formatMoney } from './format';
-import { resolveMode } from './environment';
-import { injectStyles, resolveTheme } from './styles';
-import { isNativeThreeDS, runThreeDS, type ThreeDSAction } from './threeds';
-import { summaryHtml, widgetHtml } from './template';
+import { AddressInput } from './address.js';
+import { loadBasisTheory, type BTChangeEvent, type BTElement, type BasisTheory } from './elements.js';
+import { formatMoney } from './format.js';
+import { resolveMode } from './environment.js';
+import { injectStyles, resolveTheme } from './styles.js';
+import { isNativeThreeDS, runThreeDS, type ThreeDSAction } from './threeds.js';
+import { summaryHtml, widgetHtml } from './template.js';
 import {
   CheckoutSessionClient,
   collectBrowserInfo,
@@ -14,7 +14,7 @@ import {
   type SavedMethod,
   type SessionView,
   type TipChoice,
-} from './session';
+} from './session.js';
 
 export interface MountOptions {
   publishableKey: string;

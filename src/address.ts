@@ -1,4 +1,4 @@
-import type { CheckoutSessionClient } from './session';
+import type { CheckoutSessionClient } from './session.js';
 
 export interface AddressFields {
   street?: string;

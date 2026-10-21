@@ -5,7 +5,7 @@ Take card and ACH payments on your own website. Card fields are hosted by
 servers** and your integration stays in PCI **SAQ-A** rather than SAQ-D.
 
 ```
-npm install @wizpay/checkout-sdk
+npm install @wizniche/wizpay-checkout-sdk
 ```
 
 ---
@@ -44,7 +44,7 @@ accidentally shipped to production are visible rather than silent.
 ## Server
 
 ```js
-import { WizPayCheckout } from '@wizpay/checkout-sdk/server';
+import { WizPayCheckout } from '@wizniche/wizpay-checkout-sdk/server';
 
 const wizpay = new WizPayCheckout({ secretKey: process.env.WIZPAY_SECRET_KEY });
 
@@ -95,7 +95,7 @@ fetched later. Treat it like a password: it authorises payment of that session.
 Or from npm:
 
 ```js
-import { mount } from '@wizpay/checkout-sdk';
+import { mount } from '@wizniche/wizpay-checkout-sdk';
 ```
 
 ### Allow your domain first
@@ -173,7 +173,7 @@ WIZPay API, so no Google key ever reaches the browser.
 Verify before you trust, using the **raw** request body:
 
 ```js
-import { WizPayCheckout } from '@wizpay/checkout-sdk/server';
+import { WizPayCheckout } from '@wizniche/wizpay-checkout-sdk/server';
 
 app.post('/webhooks/wizpay', express.raw({ type: 'application/json' }), (req, res) => {
   if (!WizPayCheckout.verifyWebhook(req.body, req.header('x-wizpay-signature'), SIGNING_SECRET)) {

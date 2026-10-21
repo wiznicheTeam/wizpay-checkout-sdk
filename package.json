@@ -1,6 +1,6 @@
 {
-  "name": "@wizpay/checkout-sdk",
-  "version": "0.1.0",
+  "name": "@wizniche/wizpay-checkout-sdk",
+  "version": "0.1.9",
   "description": "WIZPay Checkout \u2014 embeddable payment widget and server SDK. Card fields are hosted by Basis Theory, so card data never touches your servers.",
   "license": "MIT",
   "type": "module",
@@ -44,7 +44,8 @@
     "ecommerce"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

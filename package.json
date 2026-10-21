@@ -12,7 +12,7 @@
       "import": "./dist/index.js"
     },
     "./server": {
-      "types": "./dist/server.js.d.ts",
+      "types": "./dist/server.d.ts",
       "import": "./dist/server.js"
     }
   },
@@ -27,6 +27,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run build:browser",
+    "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepublishOnly": "npm run build",

@@ -14,7 +14,7 @@ import type { PublicCheckoutConfig } from './session.js';
  */
 export function widgetStyles(): string {
   return `
-.wzp{--wzp-radius:10px;--wzp-gap:14px;color:var(--wzp-text);font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;box-sizing:border-box}
+.wzp{--wzp-radius:10px;--wzp-gap:14px;color:var(--wzp-text);background:var(--wzp-surface);font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;box-sizing:border-box}
 .wzp *,.wzp *::before,.wzp *::after{box-sizing:inherit}
 .wzp[data-theme="light"]{--wzp-text:#16191d;--wzp-muted:#5b6672;--wzp-line:#d9dee4;--wzp-surface:#fff;--wzp-surface-2:#f6f8fa;--wzp-danger:#b42318}
 .wzp[data-theme="dark"]{--wzp-text:#e9edf2;--wzp-muted:#9aa6b2;--wzp-line:#2b3440;--wzp-surface:#141922;--wzp-surface-2:#1b2230;--wzp-danger:#f97066}
@@ -56,12 +56,55 @@ export function widgetStyles(): string {
 `.trim();
 }
 
-/** Resolve the theme, honouring the shopper's own device preference on 'auto'. */
-export function resolveTheme(theme: PublicCheckoutConfig['theme']): 'light' | 'dark' {
+/**
+ * Resolve the theme for a widget about to mount into `host`.
+ *
+ * 'auto' follows the PAGE, not the device. The widget is embedded in someone
+ * else's checkout, so a shopper on a dark phone opening a merchant's white
+ * storefront was getting a dark payment form inside a white card, which reads
+ * as broken rather than as a preference being honoured.
+ *
+ * The device preference is still the fallback, for the case where no ancestor
+ * paints an opaque background and there is genuinely nothing to match.
+ */
+export function resolveTheme(
+  theme: PublicCheckoutConfig['theme'],
+  host?: Element | null,
+): 'light' | 'dark' {
   if (theme === 'light' || theme === 'dark') return theme;
+
+  const page = host ? hostLuminance(host) : null;
+  if (page !== null) return page < 0.5 ? 'dark' : 'light';
+
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
     ? 'dark'
     : 'light';
+}
+
+/**
+ * Perceived lightness (0 to 1) of the nearest ancestor that actually paints a
+ * background, or null when every one of them is transparent.
+ */
+function hostLuminance(host: Element): number | null {
+  if (typeof window === 'undefined' || !window.getComputedStyle) return null;
+
+  for (let el: Element | null = host; el; el = el.parentElement) {
+    const rgb = parseRgb(window.getComputedStyle(el).backgroundColor);
+    if (!rgb) continue;
+    const [r, g, b] = rgb;
+    // Rec. 601 luma: close enough to perceived brightness for a light/dark call.
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+  return null;
+}
+
+/** An opaque-enough rgb()/rgba() colour, or null for transparent and unparsable. */
+function parseRgb(value: string): [number, number, number] | null {
+  const m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?/i.exec(value ?? '');
+  if (!m) return null;
+  const alpha = m[4] === undefined ? 1 : Number(m[4]);
+  if (!Number.isFinite(alpha) || alpha < 0.5) return null;
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
 let injected = false;

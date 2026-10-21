@@ -59,7 +59,25 @@ export class CheckoutWidget {
   private method = 'card';
   private tip: TipChoice | undefined;
   private funding = 'unknown';
-  private cardComplete = false;
+  /**
+   * Completeness of EACH card field, not just the number.
+   *
+   * Tracking the number alone enabled Pay as soon as the PAN was typed, so a
+   * half-finished expiry or a 4-digit CVC on a Visa went to the vault and came
+   * back as an opaque 400. The form has to know all three are valid before it
+   * offers to charge anything.
+   */
+  /**
+   * Resolved once, against the element we mount into, so the form's own markup
+   * and Basis Theory's iframes cannot disagree about which theme is in play.
+   */
+  private theme: 'light' | 'dark' = 'light';
+
+  private cardFields: Record<'number' | 'expiry' | 'cvc', boolean> = {
+    number: false,
+    expiry: false,
+    cvc: false,
+  };
   private savedMethodId: string | undefined;
   private busy = false;
   private destroyed = false;
@@ -83,11 +101,14 @@ export class CheckoutWidget {
     this.config = await this.client.config(sessionStoreId(this.session));
     this.pricing = this.session.pricing;
     this.method = this.session.methods[0] ?? 'card';
+    // Resolve against the real mount point, while it is still empty, so 'auto'
+    // reads the merchant's own background rather than the widget's.
+    this.theme = resolveTheme(this.config.theme, this.root);
 
     this.root.innerHTML = widgetHtml({
       session: this.session,
       config: this.config,
-      theme: resolveTheme(this.config.theme),
+      theme: this.theme,
       isTest: this.isTest,
     });
 
@@ -116,7 +137,7 @@ export class CheckoutWidget {
     }
 
     this.bt = await loadBasisTheory(key);
-    const style = btStyle(resolveTheme(this.config.theme));
+    const style = btStyle(this.theme);
 
     this.elements.number = this.bt.createElement('cardNumber', { targetId: 'wzp-number', style });
     this.elements.expiry = this.bt.createElement('cardExpirationDate', { targetId: 'wzp-expiry', style });
@@ -132,7 +153,7 @@ export class CheckoutWidget {
     // The BIN is what lets us re-quote before charging, so a debit card drops its
     // surcharge in front of the shopper rather than surprising them on the receipt.
     this.elements.number!.on('change', (event: BTChangeEvent) => {
-      this.cardComplete = Boolean(event.complete);
+      this.cardFields.number = Boolean(event.complete);
       this.updatePayButton();
       const funding = fundingFromEvent(event);
       if (funding !== this.funding) {
@@ -142,7 +163,10 @@ export class CheckoutWidget {
     });
 
     for (const name of ['expiry', 'cvc'] as const) {
-      this.elements[name]!.on('change', () => this.updatePayButton());
+      this.elements[name]!.on('change', (event: BTChangeEvent) => {
+        this.cardFields[name] = Boolean(event.complete);
+        this.updatePayButton();
+      });
     }
   }
 
@@ -457,7 +481,8 @@ export class CheckoutWidget {
     const instrumentOk =
       this.method === 'ach'
         ? Boolean(this.q<HTMLInputElement>('routing')?.value && this.q<HTMLInputElement>('account')?.value)
-        : Boolean(this.savedMethodId) || this.cardComplete;
+        : Boolean(this.savedMethodId) ||
+          (this.cardFields.number && this.cardFields.expiry && this.cardFields.cvc);
 
     pay.disabled = this.busy || this.destroyed || !addressOk || !instrumentOk;
   }
@@ -504,9 +529,45 @@ export class CheckoutWidget {
   }
 
   private fail(error: Error): void {
-    this.showError(error.message);
+    // The shopper sees something they can act on; the merchant still receives
+    // the original Error, with its real message and stack, through onError.
+    this.showError(shopperMessage(error));
     this.options.onError?.(error);
   }
+}
+
+/**
+ * Turn any failure into something a shopper can act on.
+ *
+ * Vault and network errors arrive phrased for whoever wrote the integration:
+ * "The API responded with status code 400. Check error.data for more
+ * information." was being shown to people trying to buy a drill. It tells them
+ * nothing, and it leaks our internals onto a merchant's page.
+ *
+ * Decline reasons are different: the provider already writes those for the
+ * cardholder, so they pass through untouched.
+ */
+export function shopperMessage(error: Error): string {
+  const raw = typeof error?.message === 'string' ? error.message : '';
+
+  // Anything that names a status code, a payload field, or an exception type is
+  // developer-facing by construction.
+  const developerFacing =
+    /status code\s*\d{3}/i.test(raw) ||
+    /error\.data|\bundefined\b|\[object |TypeError|SyntaxError/i.test(raw) ||
+    raw === '';
+
+  if (/failed to fetch|networkerror|network request failed|load failed/i.test(raw)) {
+    return 'We could not reach the payment service. Check your connection and try again.';
+  }
+  if (/\b4\d{2}\b/.test(raw) && /card|token|vault|basis/i.test(raw)) {
+    return 'We could not read your card details. Please check the number, expiry date and security code.';
+  }
+  if (developerFacing) {
+    return 'We could not complete this payment. Please check your details and try again.';
+  }
+
+  return raw;
 }
 
 /** The SDK's own CDN origin — the checkout pins it when accepting 3DS results. */

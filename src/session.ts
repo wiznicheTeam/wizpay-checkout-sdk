@@ -23,6 +23,8 @@ export interface Pricing {
 
 export interface SessionView {
   id: string;
+  /** Whether this session can store a card: true only when it names a customer. */
+  canSaveCard?: boolean;
   status: string;
   mode: string;
   currency: string;

@@ -200,15 +200,19 @@ export class CheckoutWidget {
 
   private async loadSavedCards(): Promise<void> {
     if (!this.session.methods.includes('card')) return;
+
+    // Offer to save whenever the session names a customer to attach the card
+    // to, which is the only thing that decides whether saving can work. This
+    // used to key off whether any cards came back, so the first-time shopper —
+    // the one person for whom the tick box matters — never saw it, while a
+    // session with no customer at all was shown a box that did nothing.
+    if (this.session.canSaveCard) this.show('save-card-row');
+
     try {
       const { paymentMethods } = await this.client.savedMethods();
-      if (paymentMethods.length === 0) return;
-      this.renderSavedCards(paymentMethods);
-      this.show('save-card-row');
+      if (paymentMethods.length > 0) this.renderSavedCards(paymentMethods);
     } catch {
-      // A session without a customer has no saved cards; that is not an error,
-      // and a shopper who has never paid here before must not see one.
-      this.show('save-card-row');
+      // Never block paying because the saved-card list could not be read.
     }
   }
 

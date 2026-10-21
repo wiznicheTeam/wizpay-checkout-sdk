@@ -14,7 +14,7 @@ import type { PublicCheckoutConfig } from './session.js';
  */
 export function widgetStyles(): string {
   return `
-.wzp{--wzp-radius:10px;--wzp-gap:14px;color:var(--wzp-text);background:var(--wzp-surface);font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;box-sizing:border-box}
+.wzp{--wzp-radius:10px;--wzp-gap:14px;max-width:100%;overflow-wrap:break-word;color:var(--wzp-text);background:var(--wzp-surface);font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;box-sizing:border-box}
 .wzp *,.wzp *::before,.wzp *::after{box-sizing:inherit}
 .wzp[data-theme="light"]{--wzp-text:#16191d;--wzp-muted:#5b6672;--wzp-line:#d9dee4;--wzp-surface:#fff;--wzp-surface-2:#f6f8fa;--wzp-danger:#b42318}
 .wzp[data-theme="dark"]{--wzp-text:#e9edf2;--wzp-muted:#9aa6b2;--wzp-line:#2b3440;--wzp-surface:#141922;--wzp-surface-2:#1b2230;--wzp-danger:#f97066}
@@ -69,7 +69,7 @@ export function widgetStyles(): string {
   .wzp__sk{animation:none}
   .wzp__spinner{animation-duration:2.4s}
 }
-.wzp__error{margin-bottom:var(--wzp-gap);padding:10px 12px;border-radius:var(--wzp-radius);background:rgba(180,35,24,.1);color:var(--wzp-danger);font-size:14px}
+.wzp__error{margin-bottom:var(--wzp-gap);padding:10px 12px;border-radius:var(--wzp-radius);background:rgba(180,35,24,.1);color:var(--wzp-danger);font-size:14px;overflow-wrap:anywhere}
 .wzp__error--notice{background:rgba(0,90,160,.1);color:var(--wzp-brand)}
 .wzp__saved{display:flex;flex-direction:column;gap:8px;margin-bottom:var(--wzp-gap)}
 .wzp__card{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--wzp-line);border-radius:var(--wzp-radius);background:var(--wzp-surface);cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}

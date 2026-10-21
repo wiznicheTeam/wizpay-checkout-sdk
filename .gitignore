@@ -48,3 +48,9 @@ Thumbs.db
 *.mov
 *.wmv
 
+
+# PHP (Composer) artifacts
+vendor/
+.phpunit.result.cache
+.phpunit.cache/
+composer.lock

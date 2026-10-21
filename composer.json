@@ -1,0 +1,34 @@
+{
+  "name": "wizniche/wizpay-checkout-sdk",
+  "description": "Server SDK for WIZPay Checkout: create checkout sessions and verify webhooks.",
+  "type": "library",
+  "license": "MIT",
+  "homepage": "https://wizpay.ai",
+  "keywords": ["wizpay", "payments", "checkout", "surcharge", "ach", "webhooks"],
+  "authors": [{ "name": "WIZPay", "homepage": "https://wizpay.ai" }],
+  "support": {
+    "issues": "https://bitbucket.org/wizniche1/wizpay-checkout-sdk/issues",
+    "source": "https://bitbucket.org/wizniche1/wizpay-checkout-sdk"
+  },
+  "require": {
+    "php": ">=8.2",
+    "ext-curl": "*",
+    "ext-json": "*"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.0"
+  },
+  "autoload": {
+    "psr-4": { "Wizniche\\WizpayCheckout\\": "php/src/" }
+  },
+  "autoload-dev": {
+    "psr-4": { "Wizniche\\WizpayCheckout\\Tests\\": "php/tests/" }
+  },
+  "scripts": {
+    "test": "phpunit --configuration php/phpunit.xml"
+  },
+  "config": {
+    "sort-packages": true
+  },
+  "minimum-stability": "stable"
+}

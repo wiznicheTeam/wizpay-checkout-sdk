@@ -185,6 +185,58 @@ ledger account.
 
 ---
 
+## PHP (server)
+
+```
+composer require wizniche/wizpay-checkout-sdk
+```
+
+```php
+use Wizniche\WizpayCheckout\WizPayCheckout;
+
+$wizpay = new WizPayCheckout(getenv('WIZPAY_SECRET_KEY'));
+
+$session = $wizpay->createSession([
+    'storeId'           => 'b96d7eec-...',
+    'amountMinor'       => 4200,            // $42.00, never 42.00
+    'merchantReference' => 'ORD-1001',
+    'customerRef'       => 'customer-42',   // required for saved cards
+]);
+
+// Hand these two to your page. Never log them together: they authorise a payment.
+echo json_encode(['sessionId' => $session['id'], 'clientSecret' => $session['clientSecret']]);
+```
+
+Verifying a webhook, over the RAW body:
+
+```php
+$raw    = file_get_contents('php://input');
+$header = $_SERVER['HTTP_X_WIZPAY_SIGNATURE'] ?? '';
+
+try {
+    $event = WizPayCheckout::parseWebhook($raw, $header, getenv('WIZPAY_SIGNING_SECRET'));
+} catch (\Wizniche\WizpayCheckout\WizPayError $e) {
+    http_response_code(400);
+    exit;
+}
+
+if ($event['type'] === 'checkout.completed') {
+    fulfil($event['data']);
+}
+http_response_code(200);
+```
+
+`parseWebhook` verifies and decodes in one step and throws rather than handing
+back an unverified event. Use `verifyWebhook` if you want the boolean.
+
+The package requires no third-party dependencies: it uses ext-curl and
+ext-json, which any PHP serving a checkout already has. A payments SDK on a
+merchant's server is a supply-chain surface, so it adds nothing to it. If you
+standardise on your own HTTP client, pass a transport callable as the third
+constructor argument and the SDK will use it.
+
+---
+
 ## WooCommerce
 
 A WooCommerce gateway lives in `wordpress/wizpay-checkout-woocommerce/`. It has

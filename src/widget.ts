@@ -519,9 +519,24 @@ function resolveElement(selector: string | HTMLElement): HTMLElement {
   return el;
 }
 
-/** The store a session belongs to, for the public-config lookup. */
+/**
+ * The store a session belongs to, for the public-config lookup.
+ *
+ * Falling back to '' here hid a server bug for a long time: the session view
+ * omitted storeId, so the widget cheerfully asked for the config of a store
+ * named nothing and surfaced a 404 that pointed at no store at all. Fail with
+ * something an integrator can act on instead.
+ */
 function sessionStoreId(session: SessionView & { storeId?: string }): string {
-  return session.storeId ?? '';
+  const storeId = session.storeId;
+  if (!storeId) {
+    throw new Error(
+      'WIZPay: this session did not say which store it belongs to, so the ' +
+        'checkout cannot load that store\'s configuration. Your WIZPay API may ' +
+        'predate this field — upgrade it, or contact support.',
+    );
+  }
+  return storeId;
 }
 
 /** BT exposes brand/BIN without the number; map it to our funding vocabulary. */

@@ -30,7 +30,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepublishOnly": "npm run build",
-    "build:browser": "esbuild src/index.ts --bundle --format=iife --global-name=WizPayCheckoutBundle --target=es2019 --minify --sourcemap --outfile=cdn/v1/checkout.js --banner:js=\"/* WIZPay Checkout SDK \u2014 MIT. https://bitbucket.org/wizniche1/wizpay-checkout-sdk */\"",
+    "build:browser": "esbuild src/index.ts --bundle --format=iife --global-name=WizPayCheckoutBundle --target=es2019 --minify --sourcemap --outfile=cdn/v1/checkout.js --banner:js=\"/* WIZPay Checkout SDK - MIT. https://github.com/wiznicheTeam/wizpay-checkout-sdk */\"",
     "build:cdn": "npm run build:browser && cp public/v1/3ds-return.html cdn/v1/3ds-return.html"
   },
   "keywords": [
@@ -50,5 +50,13 @@
     "esbuild": "^0.24.2",
     "typescript": "^5.4.0",
     "vitest": "^2.1.9"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wiznicheTeam/wizpay-checkout-sdk.git"
+  },
+  "homepage": "https://github.com/wiznicheTeam/wizpay-checkout-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/wiznicheTeam/wizpay-checkout-sdk/issues"
   }
 }

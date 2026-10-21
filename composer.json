@@ -7,8 +7,8 @@
   "keywords": ["wizpay", "payments", "checkout", "surcharge", "ach", "webhooks"],
   "authors": [{ "name": "WIZPay", "homepage": "https://wizpay.ai" }],
   "support": {
-    "issues": "https://bitbucket.org/wizniche1/wizpay-checkout-sdk/issues",
-    "source": "https://bitbucket.org/wizniche1/wizpay-checkout-sdk"
+    "issues": "https://github.com/wiznicheTeam/wizpay-checkout-sdk/issues",
+    "source": "https://github.com/wiznicheTeam/wizpay-checkout-sdk"
   },
   "require": {
     "php": ">=8.2",

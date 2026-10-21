@@ -71,34 +71,98 @@ describe('creating a session', () => {
 
 describe('webhook verification', () => {
   const body = JSON.stringify({ type: 'checkout.completed', data: { total_minor: 12_360 } });
-  const secret = 'whsec_test';
-  const sign = (payload: string) => createHmac('sha256', secret).update(payload).digest('hex');
+  // GOLDEN VECTOR, produced by the WIZPay API's own signer
+  // (src/developer/webhook-secret.util.ts). Hard-coding the server's real output
+  // is the point: an earlier version of this suite defined its own sign() that
+  // mirrored the implementation, so the tests passed while every genuine
+  // delivery was rejected. A test that only agrees with the code it tests
+  // proves nothing about the wire.
+  const secret = 'whsec_golden_vector_fixture';
+  const golden = {
+    body: '{"type":"checkout.completed","data":{"total_minor":12360}}',
+    t: 1761004800,
+    v1: '8a78e91b8ed12949c89fbb27fea0d0afba180bba49a8ee5dddaf6dfcaf6b7584',
+  };
+  const header = (t: number, v1: string) => `t=${t},v1=${v1}`;
+  // The vector is fixed in the past, so freshness has to be off to check it.
+  const NO_TTL = 0;
 
-  it('accepts a correctly signed body', () => {
-    expect(WizPayCheckout.verifyWebhook(body, sign(body), secret)).toBe(true);
+  it('accepts the signature the WIZPay API actually produces', () => {
+    expect(
+      WizPayCheckout.verifyWebhook(golden.body, header(golden.t, golden.v1), secret, NO_TTL),
+    ).toBe(true);
   });
 
+  it('signs over `t.body`, not the body alone', () => {
+    // The old, broken scheme. If this ever passes again, the regression is back.
+    const bodyOnly = createHmac('sha256', secret).update(golden.body).digest('hex');
+    expect(WizPayCheckout.verifyWebhook(golden.body, bodyOnly, secret, NO_TTL)).toBe(false);
+    expect(
+      WizPayCheckout.verifyWebhook(golden.body, header(golden.t, bodyOnly), secret, NO_TTL),
+    ).toBe(false);
+  });
+
+  // Everything below signs the way the server does, verified against the vector above.
+  const sign = (t: number, body: string, sec = secret) =>
+    createHmac('sha256', sec).update(`${t}.${body}`).digest('hex');
+  const fresh = (body: string, sec = secret) => {
+    const t = Math.floor(Date.now() / 1000);
+    return header(t, sign(t, body, sec));
+  };
+
   it('rejects a tampered body', () => {
-    const tampered = body.replace('12360', '1');
-    expect(WizPayCheckout.verifyWebhook(tampered, sign(body), secret)).toBe(false);
+    const tampered = golden.body.replace('12360', '1');
+    expect(WizPayCheckout.verifyWebhook(tampered, fresh(golden.body), secret)).toBe(false);
   });
 
   it('rejects a signature made with a different secret', () => {
-    const other = createHmac('sha256', 'whsec_other').update(body).digest('hex');
-    expect(WizPayCheckout.verifyWebhook(body, other, secret)).toBe(false);
+    expect(
+      WizPayCheckout.verifyWebhook(golden.body, fresh(golden.body, 'whsec_other'), secret),
+    ).toBe(false);
   });
 
-  it.each([['empty signature', ''], ['empty secret', undefined]])('rejects on %s', (label) => {
-    const sig = label === 'empty signature' ? '' : sign(body);
-    const sec = label === 'empty secret' ? '' : secret;
-    expect(WizPayCheckout.verifyWebhook(body, sig, sec)).toBe(false);
+  it('rejects a replayed delivery outside the freshness window', () => {
+    const old = Math.floor(Date.now() / 1000) - 600;
+    expect(
+      WizPayCheckout.verifyWebhook(golden.body, header(old, sign(old, golden.body)), secret),
+    ).toBe(false);
+  });
+
+  it('accepts a delivery inside the freshness window', () => {
+    const recent = Math.floor(Date.now() / 1000) - 60;
+    expect(
+      WizPayCheckout.verifyWebhook(golden.body, header(recent, sign(recent, golden.body)), secret),
+    ).toBe(true);
+  });
+
+  it('rejects a fresh timestamp pasted onto an old signature', () => {
+    // Because t is inside the signed material, restamping cannot revive a replay.
+    const old = Math.floor(Date.now() / 1000) - 600;
+    const now = Math.floor(Date.now() / 1000);
+    expect(
+      WizPayCheckout.verifyWebhook(golden.body, header(now, sign(old, golden.body)), secret),
+    ).toBe(false);
+  });
+
+  it.each([
+    ['a malformed header', 'nonsense'],
+    ['a header with no v1', 't=1761004800'],
+    ['a header with no t', 'v1=deadbeef'],
+    ['a non-numeric t', 't=abc,v1=deadbeef'],
+    ['an empty header', ''],
+  ])('rejects %s', (_label, sig) => {
+    expect(WizPayCheckout.verifyWebhook(golden.body, sig, secret)).toBe(false);
+  });
+
+  it('rejects an empty secret', () => {
+    expect(WizPayCheckout.verifyWebhook(golden.body, fresh(golden.body), '')).toBe(false);
   });
 
   it('verifies raw bytes, so a re-serialized object does not match', () => {
     // Re-encoding JSON reorders keys and drops whitespace; verifying the parsed
     // object instead of the raw bytes is the classic reason webhooks "randomly" fail.
-    const reserialized = JSON.stringify(JSON.parse(body.replace('{"type"', '{ "type"')));
-    expect(WizPayCheckout.verifyWebhook(Buffer.from(body), sign(body), secret)).toBe(true);
-    expect(WizPayCheckout.verifyWebhook(reserialized + ' ', sign(body), secret)).toBe(false);
+    const sig = fresh(golden.body);
+    expect(WizPayCheckout.verifyWebhook(Buffer.from(golden.body), sig, secret)).toBe(true);
+    expect(WizPayCheckout.verifyWebhook(golden.body + ' ', sig, secret)).toBe(false);
   });
 });

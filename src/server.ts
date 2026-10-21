@@ -96,17 +96,49 @@ export class WizPayCheckout {
   /**
    * Verify a webhook signature before trusting its body.
    *
+   * WIZPay sends `X-Wizpay-Signature: t=<unix seconds>,v1=<hex>`, where the hex
+   * is HMAC-SHA256 over `"<t>.<raw body>"`. The timestamp is inside the signed
+   * material, so an attacker cannot replay an old delivery with a fresh clock,
+   * and we additionally reject anything outside `toleranceSeconds`.
+   *
    * Compare over the RAW request bytes, not a re-serialized object: re-encoding
    * JSON changes key order and whitespace, and the signature will never match.
    *
    * Constant-time comparison, so a wrong signature cannot be discovered one byte
    * at a time by timing the responses.
+   *
+   * @param signatureHeader the full `X-Wizpay-Signature` header value.
+   * @param toleranceSeconds max clock skew to accept; 0 disables the check.
    */
-  static verifyWebhook(rawBody: string | Buffer, signature: string, signingSecret: string): boolean {
-    if (!signature || !signingSecret) return false;
-    const expected = createHmac('sha256', signingSecret).update(rawBody).digest('hex');
+  static verifyWebhook(
+    rawBody: string | Buffer,
+    signatureHeader: string,
+    signingSecret: string,
+    toleranceSeconds = 300,
+  ): boolean {
+    if (!signatureHeader || !signingSecret) return false;
+
+    let t = '';
+    let v1 = '';
+    for (const part of String(signatureHeader).split(',')) {
+      const eq = part.indexOf('=');
+      if (eq === -1) continue;
+      const key = part.slice(0, eq).trim();
+      const value = part.slice(eq + 1).trim();
+      if (key === 't') t = value;
+      else if (key === 'v1') v1 = value;
+    }
+    if (!t || !v1 || !/^\d+$/.test(t)) return false;
+
+    if (toleranceSeconds > 0) {
+      const age = Math.abs(Date.now() / 1000 - Number(t));
+      if (!Number.isFinite(age) || age > toleranceSeconds) return false;
+    }
+
+    const body = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
+    const expected = createHmac('sha256', signingSecret).update(`${t}.${body}`).digest('hex');
     const a = Buffer.from(expected);
-    const b = Buffer.from(signature.trim());
+    const b = Buffer.from(v1);
     return a.length === b.length && timingSafeEqual(a, b);
   }
 }

@@ -101,16 +101,49 @@ class WizPay_API {
 	/**
 	 * Verify a webhook signature over the RAW body.
 	 *
+	 * WIZPay sends `X-Wizpay-Signature: t=<unix seconds>,v1=<hex>`, where the hex
+	 * is HMAC-SHA256 over `"<t>.<raw body>"`. The timestamp is part of the signed
+	 * material, so an old delivery cannot be replayed with a fresh clock, and we
+	 * also reject anything outside $tolerance seconds.
+	 *
 	 * Never re-encode the JSON first: that reorders keys and drops whitespace, so
 	 * the signature can never match. It is the most common reason webhooks
 	 * "randomly" fail.
+	 *
+	 * @param string $signature_header full X-Wizpay-Signature header value.
+	 * @param int    $tolerance        max clock skew in seconds; 0 disables.
 	 */
-	public static function verify_webhook( $raw_body, $signature, $signing_secret ) {
-		if ( '' === (string) $signature || '' === (string) $signing_secret ) {
+	public static function verify_webhook( $raw_body, $signature_header, $signing_secret, $tolerance = 300 ) {
+		if ( '' === (string) $signature_header || '' === (string) $signing_secret ) {
 			return false;
 		}
-		$expected = hash_hmac( 'sha256', $raw_body, $signing_secret );
-		return hash_equals( $expected, trim( (string) $signature ) );
+
+		$t  = '';
+		$v1 = '';
+		foreach ( explode( ',', (string) $signature_header ) as $part ) {
+			$eq = strpos( $part, '=' );
+			if ( false === $eq ) {
+				continue;
+			}
+			$key   = trim( substr( $part, 0, $eq ) );
+			$value = trim( substr( $part, $eq + 1 ) );
+			if ( 't' === $key ) {
+				$t = $value;
+			} elseif ( 'v1' === $key ) {
+				$v1 = $value;
+			}
+		}
+
+		if ( '' === $t || '' === $v1 || ! ctype_digit( $t ) ) {
+			return false;
+		}
+
+		if ( $tolerance > 0 && abs( time() - (int) $t ) > $tolerance ) {
+			return false;
+		}
+
+		$expected = hash_hmac( 'sha256', $t . '.' . $raw_body, $signing_secret );
+		return hash_equals( $expected, $v1 );
 	}
 
 	/** Minor units for a WooCommerce amount, respecting the currency's decimals. */

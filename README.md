@@ -165,6 +165,20 @@ Parse **after** verifying. Re-serializing JSON changes key order and whitespace,
 and the signature will never match — the most common reason webhooks "randomly"
 fail.
 
+### The signature scheme
+
+If you verify by hand rather than with an SDK, the header looks like this:
+
+```
+X-Wizpay-Signature: t=1761004800,v1=9f86d0818...
+```
+
+`v1` is HMAC-SHA256 of `"<t>.<raw body>"`, hex encoded, keyed by your endpoint
+signing secret. The timestamp is inside the signed material, so it cannot be
+altered to make an old delivery look fresh. Reject anything whose `t` is more
+than five minutes from your own clock, and compare in constant time. Both SDKs
+do all of this for you, including the freshness window.
+
 `checkout.completed` carries the order context, with `subtotal_minor`,
 `tip_minor` and `surcharge_minor` broken out so you can post each to its own
 ledger account.

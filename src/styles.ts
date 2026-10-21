@@ -25,8 +25,7 @@ export function widgetStyles(): string {
    brand owns the top of their checkout; ours only needs to say who handled the
    payment. */
 .wzp__powered{display:flex;align-items:center;justify-content:center;gap:5px;margin-top:12px;color:var(--wzp-muted);font-size:11px;letter-spacing:.2px}
-.wzp__poweredlogo{height:13px;max-width:72px;opacity:.85}
-.wzp__poweredname{font-weight:600}
+.wzp__poweredmark{height:14px;width:14px;opacity:.75;vertical-align:-2px}
 .wzp__badge{margin-left:auto;padding:2px 8px;border-radius:999px;background:#fff3cd;color:#8a6100;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
 .wzp__field{margin-bottom:var(--wzp-gap)}
 .wzp__label{display:block;margin-bottom:6px;font-size:13px;font-weight:600}

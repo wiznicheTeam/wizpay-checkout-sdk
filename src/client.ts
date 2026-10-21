@@ -36,7 +36,14 @@ export class HttpClient {
     options: ClientOptions = {},
   ) {
     this.base = normalizeApiBase(options.apiBase);
-    const impl = options.fetchImpl ?? (typeof fetch !== 'undefined' ? fetch : undefined);
+    // BIND to globalThis. Storing bare `fetch` on an instance and calling it as
+    // `this.doFetch(...)` passes the HttpClient as the receiver, and browsers
+    // enforce that receiver: every call throws "Failed to execute 'fetch' on
+    // 'Window': Illegal invocation", so the widget never mounts. Node's fetch
+    // does not care about its receiver, which is why this survived the whole
+    // test suite and only appeared in a real browser.
+    const impl = options.fetchImpl
+      ?? (typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : undefined);
     if (!impl) {
       throw new Error('WIZPay: no fetch implementation available. On Node, use 18 or newer.');
     }
